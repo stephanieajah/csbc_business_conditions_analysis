@@ -8,5 +8,4 @@ __pycache__/
 .DS_Store
 Thumbs.db
 data/processed/
-outputs/*.png
-outputs/*.csv
+
