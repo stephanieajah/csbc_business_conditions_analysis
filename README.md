@@ -148,8 +148,6 @@ scanning the folder, so it does not depend on any naming convention.
 
 ## Time taken
 
-## Time taken
-
 Roughly 7 hours across both parts, which is over the 3 to 5 hour guideline. Most of
 the extra time went into the data quality work: the label drift, the suppressed
 zeros and the missing response option each needed to be found and understood before
