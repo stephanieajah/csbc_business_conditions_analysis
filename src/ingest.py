@@ -1,7 +1,7 @@
 """Ingest a new quarterly CSBC file and refresh the national trend chart.
 
 Usage:
-    python src/ingest.py data/raw/"Data CSBC-Q3 2024.csv"
+    python src/ingest.py "data/raw/Data CSBC-Q3 2024.csv"
     python src/ingest.py            # rebuild from everything in data/raw/
 """
 import sys
@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw"
 PROCESSED = ROOT / "data" / "processed" / "combined.csv"
-OUTPUT = ROOT / "outputs" / "analysis1_national_trend.png"
+OUTPUT = ROOT / "outputs" / "pipeline_national_trend.png"
 
 REQUIRED = ["GEO", "Business_characteristics", "Business_information",
             "Expected_change", "VALUE", "Quarter"]
@@ -102,11 +102,13 @@ def national_trend(cells):
     # a quarter stops being "latest" as soon as the next file arrives.
     complete_base = nat[nat["n_missing"] == 0].groupby("metric")["base"].mean()
     fix = nat["pct_decrease"].isna() & nat["metric"].map(complete_base).notna()
+    imputed = []
     if fix.any():
         nat.loc[fix, "pct_decrease"] = (
             nat.loc[fix, "metric"].map(complete_base)
             - nat.loc[fix, "pct_increase"] - nat.loc[fix, "pct_same"]
         )
+        imputed = list(zip(nat.loc[fix, "Quarter"], nat.loc[fix, "metric"]))
         for q in sorted(nat.loc[fix, "Quarter"].unique(), key=qkey):
             n = int((fix & nat["Quarter"].eq(q)).sum())
             print(f"[info] reconstructed {n} missing 'decrease' value(s) in {q}")
@@ -118,14 +120,26 @@ def national_trend(cells):
 
     fig, ax = plt.subplots(figsize=(9, 5))
     for m in wide.columns:
-        ax.plot(wide.index, wide[m], marker="o", label=m)
+        line, = ax.plot(wide.index, wide[m], marker="o", label=m)
+        est = [q for q in wide.index if (q, m) in imputed]
+        if est:
+            ax.plot(est, wide.loc[est, m], marker="o", color=line.get_color(),
+                    markerfacecolor="white", markersize=9, ls="none")
+
     ax.axhline(0, color="black", lw=0.8)
-    ax.set_ylabel("Net balance (% increase − % decrease)")
+    ax.set_ylabel("Net balance (% increase minus % decrease)")
     ax.set_title("Canadian business expectations, next 3 months\nAll industries, national")
-    ax.legend(); ax.grid(alpha=0.3)
+    ax.legend()
+    ax.grid(alpha=0.3)
+    if imputed:
+        ax.text(0.0, -0.14,
+                "Hollow markers indicate a reconstructed 'decrease' value, filled from "
+                "that metric's average base across quarters where all three responses "
+                "are present.",
+                transform=ax.transAxes, fontsize=8, color="#555", va="top")
     plt.tight_layout()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(OUTPUT, dpi=150)
+    plt.savefig(OUTPUT, dpi=150, bbox_inches="tight")
     return wide
 
 
